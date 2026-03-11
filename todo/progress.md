@@ -1,126 +1,133 @@
-# MicroPython Port for Pycom LoRa Devices — Progress
+# MicroPython Port for Pycom LoRa Devices
 
-## Phase 1: Board Definitions and Basic Boot
+## Overview
 
-### Step 1.1 — Fork and setup
-- [x] Clone upstream MicroPython
-- [x] Checkout v1.27.0
+Pycom's MicroPython fork was archived Sep 2024 (last commit Feb 2022), based on
+ancient MicroPython ~v1.9 / ESP-IDF v3.x. This port adds board definitions and a
+LoRa driver to upstream MicroPython v1.27.0 (ESP-IDF v5.5.1) for Pycom hardware.
+
+### Target Hardware
+
+| Board | Module | Flash | PSRAM | LoRa  | CS     | Reset   | DIO0   |
+|-------|--------|-------|-------|-------|--------|---------|--------|
+| LoPy  | L01    | 4MB   | None  | SX1272| GPIO17 | GPIO18  | GPIO23 |
+| LoPy4 | L04    | 8MB   | 4MB   | SX1276| GPIO18 | None    | GPIO23 |
+
+SPI bus (all): MOSI=GPIO27, MISO=GPIO19, SCLK=GPIO5, Mode 0, 10 MHz.
+
+### Design Decisions
+
+- 2 board defs (PYCOM_LOPY, PYCOM_LOPY4) — same electronics within each pair
+- Pure Python LoRa driver (frozen module), C module later if needed
+- New `LoRa` class API (not Pycom's `AF_LORA` socket pattern)
+- RGB LED via standard `neopixel` module (WS2812 on GPIO0)
+- Shared modules in `ports/esp32/boards/pycom_common/`
+
+---
+
+## Done
+
+### Phase 1: Board Definitions and Basic Boot
+
+- [x] Clone upstream MicroPython, checkout v1.27.0
+- [x] **PYCOM_LOPY board** — mpconfigboard.h, cmake, sdkconfig, pins.csv, board.json, manifest.py, board_config.py
+- [x] **PYCOM_LOPY4 board** — same files + custom 8MB partition table + SPIRAM sdkconfig
+- [x] **Pin mapping** — 24 P-pins (P0-P23) mapped to GPIOs for both boards
+
+### Phase 2: LoRa Driver (Raw LoRa / P2P)
+
+- [x] **sx127x.py** — unified SX1272/SX1276 SPI driver
+  - SPI register r/w, chip auto-detect via version register (0x22/0x12)
+  - BW/CR encoding differences handled per chip
+  - RSSI: SX1272=-139+raw, SX1276=-157+raw (HF)
+  - DIO0 IRQ with flag disambiguation (GPIO23 is diode-OR)
+  - HW reset (LoPy GPIO18) / soft reset (LoPy4)
+  - send(), recv(timeout), on_recv(callback)
+- [x] **lora.py** — high-level API: `LoRa(frequency, sf, bw, ...)` with send/recv/on_recv
+- [x] **pycom_rgb.py** — RGB LED helper: color(), off(), heartbeat()
+- [x] **board_config.py** for each board (pin constants)
+- [x] **Manifests** freeze pycom_common + board modules
+
+---
+
+## Pending
+
+### Phase 1 — Build & Hardware Validation
+
 - [ ] Install ESP-IDF v5.5.1
 - [ ] `git submodule update --init --recursive`
+- [ ] `make BOARD=PYCOM_LOPY` compiles
+- [ ] `make BOARD=PYCOM_LOPY4` compiles
+- [ ] REPL over UART
+- [ ] Pin toggle: `machine.Pin('P3', Pin.OUT).value(1)` → GPIO4
+- [ ] WiFi: `network.WLAN(network.STA_IF).scan()` returns APs
+- [ ] BLE: `bluetooth.BLE().active(True)` works
+- [ ] NeoPixel on GPIO0 lights up
+- [ ] Filesystem r/w persists across reboot
+- [ ] LoPy4: PSRAM in `micropython.mem_info()`
+- [ ] Verify all 24 P-pins with multimeter/logic analyzer
 
-### Step 1.2 — Create PYCOM_LOPY board
-- [x] `mpconfigboard.h` — board name, MCU, LoRa HW constants (CS=GPIO17, RESET=GPIO18, CHIP=1272)
-- [x] `mpconfigboard.cmake` — IDF_TARGET=esp32, sdkconfig defaults
-- [x] `sdkconfig.board` — 4MB flash (uses default partition table)
-- [x] `pins.csv` — 24 Pycom P-pins mapped to GPIOs
-- [x] `board.json` — metadata (mcu=esp32, features=[BLE, WiFi, LoRa])
-- [x] `manifest.py` — includes base + pycom_common + board modules
-- [x] `modules/board_config.py` — LoRa pin constants for SX1272
+### Phase 2 — LoRa Hardware Testing
 
-### Step 1.3 — Create PYCOM_LOPY4 board
-- [x] `mpconfigboard.h` — LoRa HW constants (CS=GPIO18, RESET=-1, CHIP=1276)
-- [x] `mpconfigboard.cmake` — adds sdkconfig.spiram
-- [x] `sdkconfig.board` — 8MB flash, custom partition table
-- [x] `partitions.csv` — ~2MB firmware + ~6MB VFS
-- [x] `pins.csv` — identical to PYCOM_LOPY
-- [x] `board.json` — metadata with SPIRAM feature
-- [x] `manifest.py` — includes base + pycom_common + board modules
-- [x] `modules/board_config.py` — LoRa pin constants for SX1276
+- [ ] SX1272 chip detection on LoPy
+- [ ] SX1276 chip detection on LoPy4
+- [ ] Point-to-point TX/RX between two boards (868 MHz SF7)
+- [ ] RSSI/SNR readings
+- [ ] Async recv via on_recv() callback
+- [ ] RGB LED test on hardware
 
-### Step 1.4 — Pin mapping
-- [x] All 24 P-pins defined in pins.csv for both boards
-- [ ] Verify on hardware with multimeter/logic analyzer
+### Phase 3 — LoRaWAN and Optimizations (Future)
 
-### Step 1.5 — Build and validate
-- [ ] `make BOARD=PYCOM_LOPY` compiles successfully
-- [ ] `make BOARD=PYCOM_LOPY4` compiles successfully
-- [ ] REPL works over UART
-- [ ] Pin toggling works (`machine.Pin('P3', Pin.OUT).value(1)`)
-- [ ] WiFi scan works
-- [ ] BLE activates
-- [ ] NeoPixel on GPIO0 works
-- [ ] Filesystem persists across reboots
-- [ ] PSRAM detected on LoPy4
+- [ ] Port `lemariva/uPyLoRaWAN` as frozen LoRaWAN MAC (OTAA/ABP)
+- [ ] C user module for timing-critical ISR (Class A RX windows)
+- [ ] OTA via board variant (`BOARD_VARIANT=OTA`)
 
 ---
 
-## Phase 2: LoRa Driver (Raw LoRa / Point-to-Point)
+## Risks
 
-### Step 2.1 — Shared module directory
-- [x] Created `ports/esp32/boards/pycom_common/`
+| Risk | Mitigation |
+|------|-----------|
+| 4MB flash tight with WiFi+BLE+LoRa | Omit BLE in LoPy sdkconfig if needed |
+| Python ISR latency on DIO0 | OK for raw LoRa; C module for LoRaWAN |
+| GPIO23 diode-OR of DIO0/1/2 | Read IRQ flags register to disambiguate |
+| Old Pycom bootloader in flash | Erase flash completely before first deploy |
+| SX1272 vs SX1276 register diffs | Both chip paths implemented; test independently |
 
-### Step 2.2 — SX127x driver
-- [x] `sx127x.py` — unified SPI driver for SX1272/SX1276
-  - [x] SPI register read/write
-  - [x] Chip auto-detection via version register
-  - [x] Bandwidth encoding differences (SX1272 vs SX1276)
-  - [x] Coding rate encoding differences
-  - [x] RSSI calculation differences
-  - [x] DIO0 interrupt handler with IRQ flags disambiguation
-  - [x] Hardware reset (LoPy) / soft reset (LoPy4)
-  - [x] send() — blocking TX
-  - [x] recv() — blocking RX with timeout
-  - [x] on_recv() — async RX via DIO0 interrupt
-  - [ ] Test on real SX1272 hardware
-  - [ ] Test on real SX1276 hardware
-
-### Step 2.3 — High-level LoRa module
-- [x] `lora.py` — simple LoRa class with send/recv/on_recv
-  - [x] Auto-detects board config from board_config module
-  - [x] Configurable: frequency, SF, BW, CR, TX power, preamble, sync word, CRC
-  - [ ] Test point-to-point communication between two boards
-
-### Step 2.4 — Board-specific config modules
-- [x] `PYCOM_LOPY/modules/board_config.py`
-- [x] `PYCOM_LOPY4/modules/board_config.py`
-
-### Step 2.5 — RGB LED helper
-- [x] `pycom_rgb.py` — color(), off(), heartbeat()
-- [ ] Test on hardware
-
-### Step 2.6 — Update manifests
-- [x] Both boards freeze pycom_common + board modules
-
----
-
-## Phase 3: LoRaWAN and Optimizations (Future)
-- [ ] Port uPyLoRaWAN as frozen Python LoRaWAN MAC layer
-- [ ] Optional C user module for timing-critical ISR handling
-- [ ] OTA support via board variant
-
----
-
-## File Tree (implemented)
+## File Tree
 
 ```
 ports/esp32/boards/
 ├── pycom_common/
-│   ├── sx127x.py          ✅
-│   ├── lora.py            ✅
-│   └── pycom_rgb.py       ✅
+│   ├── sx127x.py           # SX1272/SX1276 radio driver
+│   ├── lora.py             # High-level LoRa API
+│   └── pycom_rgb.py        # RGB LED helper
 ├── PYCOM_LOPY/
-│   ├── board.json         ✅
-│   ├── manifest.py        ✅
-│   ├── mpconfigboard.cmake ✅
-│   ├── mpconfigboard.h    ✅
-│   ├── pins.csv           ✅
-│   ├── sdkconfig.board    ✅
+│   ├── board.json
+│   ├── manifest.py
+│   ├── mpconfigboard.cmake
+│   ├── mpconfigboard.h
+│   ├── pins.csv
+│   ├── sdkconfig.board
 │   └── modules/
-│       └── board_config.py ✅
+│       └── board_config.py
 └── PYCOM_LOPY4/
-    ├── board.json         ✅
-    ├── manifest.py        ✅
-    ├── mpconfigboard.cmake ✅
-    ├── mpconfigboard.h    ✅
-    ├── partitions.csv     ✅
-    ├── pins.csv           ✅
-    ├── sdkconfig.board    ✅
+    ├── board.json
+    ├── manifest.py
+    ├── mpconfigboard.cmake
+    ├── mpconfigboard.h
+    ├── partitions.csv
+    ├── pins.csv
+    ├── sdkconfig.board
     └── modules/
-        └── board_config.py ✅
+        └── board_config.py
 ```
 
-## Notes
-- LoPy uses default `partitions-4MiBplus.csv` (4MB flash, no custom table needed)
-- LoPy4 needs custom partition table for 8MB flash with explicit VFS partition
-- `neopixel` is already included in the base ESP32 manifest — no need to add separately
-- pins.csv format follows upstream MicroPython convention (name,GPIO)
+## References
+
+- Upstream ESP32 port template: `ports/esp32/boards/ESP32_GENERIC/`
+- Upstream LoRa board: `ports/esp32/boards/LILYGO_TTGO_LORA32/`
+- Archived Pycom source: `github.com/pycom/pycom-micropython-sigfox`
+- Community SX127x driver: `github.com/Wei1234c/SX127x_driver_for_MicroPython_on_ESP8266`
+- SX1276 datasheet: Semtech DS_SX1276-7-8-9_W_APP_V7
+- SX1272 datasheet: Semtech DS_SX1272/73_V4
