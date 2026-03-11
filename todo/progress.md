@@ -30,6 +30,8 @@ SPI bus (all): MOSI=GPIO27, MISO=GPIO19, SCLK=GPIO5, Mode 0, 10 MHz.
 ### Phase 1: Board Definitions and Basic Boot
 
 - [x] Clone upstream MicroPython, checkout v1.27.0
+- [x] Install ESP-IDF v5.4.1 and build toolchain
+- [x] Submodules initialized
 - [x] **PYCOM_LOPY board** — mpconfigboard.h, cmake, sdkconfig, pins.csv, board.json, manifest.py, board_config.py
 - [x] **PYCOM_LOPY4 board** — same files + custom 8MB partition table + SPIRAM sdkconfig
 - [x] **Pin mapping** — 24 P-pins (P0-P23) mapped to GPIOs for both boards
@@ -54,10 +56,12 @@ SPI bus (all): MOSI=GPIO27, MISO=GPIO19, SCLK=GPIO5, Mode 0, 10 MHz.
 
 ### Phase 1 — Build & Hardware Validation
 
-- [ ] Install ESP-IDF v5.5.1
-- [ ] `git submodule update --init --recursive`
-- [ ] `make BOARD=PYCOM_LOPY` compiles
-- [ ] `make BOARD=PYCOM_LOPY4` compiles
+- [x] Install ESP-IDF v5.4.1 (at ~/esp/esp-idf-v5.4)
+- [x] `git submodule update --init --recursive`
+- [x] `make BOARD=PYCOM_LOPY` compiles (1.6MB app, 17% free in partition)
+- [x] `make BOARD=PYCOM_LOPY4` compiles (1.5MB app, 25% free in partition)
+- [x] Combined firmware images created (bootloader + partitions + app)
+- [x] GitHub release v0.1.0-alpha created
 - [ ] REPL over UART
 - [ ] Pin toggle: `machine.Pin('P3', Pin.OUT).value(1)` → GPIO4
 - [ ] WiFi: `network.WLAN(network.STA_IF).scan()` returns APs
