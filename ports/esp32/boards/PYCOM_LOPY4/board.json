@@ -11,7 +11,7 @@
         "WiFi",
         "LoRa",
         "External Flash",
-        "SPIRAM"
+        "External RAM"
     ],
     "images": [],
     "mcu": "esp32",
