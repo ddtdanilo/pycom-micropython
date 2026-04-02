@@ -1,0 +1,10 @@
+init default: OK
+init custom: OK
+properties: OK
+power modes: OK
+send bytes: OK
+send string: OK
+recv timeout: True
+on_recv set: OK
+on_recv clear: OK
+all tests passed
